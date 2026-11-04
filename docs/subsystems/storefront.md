@@ -19,7 +19,7 @@ sources:
   - code: src/components/pay-panel.tsx
   - code: src/components/art.tsx
   - code: tests/session.test.ts
-verified_at: 4628ba6
+verified_at: dc565b5
 ---
 
 # Storefront and guest checkout

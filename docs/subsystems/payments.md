@@ -18,7 +18,7 @@ sources:
   - code: tests/stripe.test.ts
   - code: tests/settlement.db.test.ts
   - code: src/app/api/payments/demo/route.ts
-verified_at: 4628ba6
+verified_at: dc565b5
 ---
 
 # Payments and settlement

@@ -10,7 +10,7 @@ sources:
   - code: Dockerfile
   - code: docker-compose.yml
   - code: .dockerignore
-verified_at: 0bc90b4
+verified_at: dc565b5
 ---
 
 # CI and deployment

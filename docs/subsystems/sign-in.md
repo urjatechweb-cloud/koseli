@@ -15,7 +15,7 @@ sources:
   - code: src/app/api/auth/signout/route.ts
   - code: tests/otp.db.test.ts
   - code: tests/phone-sms.test.ts
-verified_at: 94312cb
+verified_at: dc565b5
 ---
 
 # Phone sign-in
