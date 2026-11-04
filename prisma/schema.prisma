@@ -1,0 +1,508 @@
+// =============================================================================
+// Chino — core schema: Users, Catalog, Margin-engine Pricing, Orders, Payments
+// -----------------------------------------------------------------------------
+// Money rules (non-negotiable):
+//   * All amounts are integers in the MINOR unit (paisa for NPR, cents for USD).
+//     Never store money as Float/Decimal-as-float.
+//   * Vendor base cost lives ONLY in `VendorOffer.baseCostMinor`. Customer-facing
+//     reads go through `ProductPrice` (retail) and never join VendorOffer.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Supabase: pooled URL above, direct URL here for migrations
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum Role {
+  CUSTOMER
+  VENDOR
+  SERVICE_PROVIDER // photographers, videographers, event planners
+  ADMIN
+}
+
+enum Currency {
+  NPR
+  USD
+  AUD
+  GBP
+  EUR
+  INR
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  OUT_OF_STOCK
+  ARCHIVED
+}
+
+enum ProductKind {
+  PHYSICAL
+  DIGITAL // e-gift cards, vouchers
+  SERVICE // bookable services (photography, events) — see services module
+}
+
+enum MarkupStrategy {
+  MARKUP_ON_COST // retail = cost * (1 + bps/10000)   -> 20% markup = 16.67% gross margin
+  MARGIN_ON_PRICE // retail = cost / (1 - bps/10000)  -> 20% gross margin on the sale price
+}
+
+enum PricingRuleScope {
+  GLOBAL
+  CATEGORY
+  VENDOR
+  VENDOR_CATEGORY
+  PRODUCT
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  FULFILLING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  FONEPAY_WEB
+  FONEPAY_QR
+  ESEWA
+  KHALTI
+  STRIPE
+  PAYPAL
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+// ----------------------------------------------------------------------------
+// Users & identity
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  phone         String?   @unique // E.164, e.g. +97798XXXXXXXX — primary login in Nepal
+  emailVerified DateTime?
+  phoneVerified DateTime?
+  name          String?
+  avatarUrl     String?
+  role          Role      @default(CUSTOMER)
+
+  // Diaspora-aware preferences
+  countryCode       String   @default("NP") @db.Char(2) // ISO-3166 alpha-2 of where the BUYER lives
+  preferredCurrency Currency @default(NPR)
+  locale            String   @default("en-NP") // en-NP | ne-NP
+
+  addresses  Address[]
+  recipients Recipient[]
+  orders     Order[]
+  vendor     Vendor?     @relation("VendorOwner")
+  sessions   Session[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete for GDPR / account closure
+
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Saved gift recipients ("Aama in Pokhara") — powers one-tap re-gifting.
+model Recipient {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  relationship String? // mother, partner, colleague…
+  phone        String?
+  birthday     DateTime? @db.Date
+  anniversary  DateTime? @db.Date
+  addressId    String?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address      Address?  @relation(fields: [addressId], references: [id])
+
+  @@index([userId])
+}
+
+model Address {
+  id         String      @id @default(cuid())
+  userId     String
+  label      String? // Home, Office
+  line1      String
+  line2      String?
+  landmark   String? // essential in Nepal — street addressing is inconsistent
+  cityId     String
+  ward       Int?
+  lat        Float?
+  lng        Float?
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city       City        @relation(fields: [cityId], references: [id])
+  recipients Recipient[]
+  orders     Order[]
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// Geography & delivery
+// ----------------------------------------------------------------------------
+
+model City {
+  id       String  @id @default(cuid())
+  slug     String  @unique // pokhara, kathmandu, lalitpur, chitwan
+  name     String
+  nameNe   String?
+  province String
+  isLive   Boolean @default(false) // beta: only Pokhara = true
+  timezone String  @default("Asia/Kathmandu")
+
+  addresses    Address[]
+  vendors      Vendor[]
+  availability ProductCityAvailability[]
+}
+
+// ----------------------------------------------------------------------------
+// Vendors (supply side)
+// ----------------------------------------------------------------------------
+
+model Vendor {
+  id              String  @id @default(cuid())
+  ownerId         String? @unique
+  slug            String  @unique
+  name            String
+  panNumber       String? @unique // Nepal PAN/VAT registration
+  phone           String?
+  cityId          String
+  isVerified      Boolean @default(false)
+  isActive        Boolean @default(true)
+  // Where the catalog came from: "manual" | "csv" | "scraper:<source>" | "api:<partner>"
+  ingestionSource String  @default("manual")
+
+  owner        User?         @relation("VendorOwner", fields: [ownerId], references: [id])
+  city         City          @relation(fields: [cityId], references: [id])
+  offers       VendorOffer[]
+  pricingRules PricingRule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cityId, isActive])
+}
+
+// ----------------------------------------------------------------------------
+// Catalog
+// ----------------------------------------------------------------------------
+
+model Category {
+  id           String        @id @default(cuid())
+  slug         String        @unique // cakes, flowers, electronics, dhaka-topi, pashmina
+  name         String
+  nameNe       String?
+  parentId     String?
+  sortOrder    Int           @default(0)
+  parent       Category?     @relation("CategoryTree", fields: [parentId], references: [id])
+  children     Category[]    @relation("CategoryTree")
+  products     Product[]
+  pricingRules PricingRule[]
+
+  @@index([parentId])
+}
+
+/// Dashain, Tihar (Bhai Tika), Teej, birthday, wedding, pasni, anniversary…
+model Occasion {
+  id       String            @id @default(cuid())
+  slug     String            @unique
+  name     String
+  nameNe   String?
+  products ProductOccasion[]
+}
+
+/// Mother, father, partner, sibling, kids, corporate…
+model RecipientTag {
+  id       String                @id @default(cuid())
+  slug     String                @unique
+  name     String
+  products ProductRecipientTag[]
+}
+
+model Product {
+  id            String        @id @default(cuid())
+  slug          String        @unique
+  title         String
+  titleNe       String?
+  description   String
+  kind          ProductKind   @default(PHYSICAL)
+  status        ProductStatus @default(DRAFT)
+  categoryId    String
+  brand         String?
+  attributes    Json          @default("{}") // flavour, size, weight_g, eggless, material…
+  isPerishable  Boolean       @default(false) // cakes/flowers -> same-day only
+  model3dUrl    String? // .glb for the Three.js 360° hamper viewer
+  searchVersion Int           @default(0) // bump to trigger re-index in Algolia/Elasticsearch
+
+  category     Category                  @relation(fields: [categoryId], references: [id])
+  images       ProductImage[]
+  offers       VendorOffer[]
+  price        ProductPrice?
+  occasions    ProductOccasion[]
+  recipients   ProductRecipientTag[]
+  availability ProductCityAvailability[]
+  pricingRules PricingRule[]
+  orderItems   OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId, status])
+  @@index([status, updatedAt])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+}
+
+model ProductOccasion {
+  productId  String
+  occasionId String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  occasion   Occasion @relation(fields: [occasionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, occasionId])
+  @@index([occasionId])
+}
+
+model ProductRecipientTag {
+  productId      String
+  recipientTagId String
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  recipientTag   RecipientTag @relation(fields: [recipientTagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, recipientTagId])
+  @@index([recipientTagId])
+}
+
+/// Where a product can be delivered and how fast — powers "delivers today in Pokhara".
+model ProductCityAvailability {
+  productId          String
+  cityId             String
+  minDeliveryMinutes Int // e.g. 120 for same-day cakes
+  sameDayCutoffLocal String? // "16:00" Asia/Kathmandu
+  deliveryFeeMinor   Int     @default(0) // NPR paisa
+  isAvailable        Boolean @default(true)
+  product            Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  city               City    @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@id([productId, cityId])
+  @@index([cityId, isAvailable, minDeliveryMinutes])
+}
+
+// ----------------------------------------------------------------------------
+// Pricing — the 20% margin engine
+// ----------------------------------------------------------------------------
+
+/// PRIVATE. The vendor's cost price for a product. Never selected by any
+/// customer-facing query or serializer. One product may have several vendors;
+/// the engine picks the cheapest active, in-stock offer as the cost basis.
+model VendorOffer {
+  id            String   @id @default(cuid())
+  vendorId      String
+  productId     String
+  vendorSku     String
+  baseCostMinor Int // NPR paisa, VAT-inclusive as quoted by vendor
+  currency      Currency @default(NPR)
+  stockQty      Int? // null = untracked / made-to-order
+  isActive      Boolean  @default(true)
+  sourceUrl     String? // provenance when ingested by scraper
+  lastSeenAt    DateTime @default(now()) // scraper heartbeat; stale offers get deactivated
+
+  vendor  Vendor  @relation(fields: [vendorId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vendorId, vendorSku])
+  @@index([productId, isActive, baseCostMinor])
+}
+
+/// Configurable margin policy. Most-specific active rule wins:
+/// PRODUCT > VENDOR_CATEGORY > VENDOR > CATEGORY > GLOBAL.
+/// Seed one GLOBAL rule at 2000 bps (20%).
+model PricingRule {
+  id             String           @id @default(cuid())
+  name           String
+  scope          PricingRuleScope
+  strategy       MarkupStrategy   @default(MARKUP_ON_COST)
+  basisPoints    Int // 2000 = 20.00%
+  roundToMinor   Int              @default(100) // round retail UP to nearest NPR 1 (100 paisa); 1000 = NPR 10
+  minProfitMinor Int              @default(0) // floor on absolute profit per unit
+  categoryId     String?
+  vendorId       String?
+  productId      String?
+  isActive       Boolean          @default(true)
+  validFrom      DateTime         @default(now())
+  validTo        DateTime?
+
+  category Category?      @relation(fields: [categoryId], references: [id])
+  vendor   Vendor?        @relation(fields: [vendorId], references: [id])
+  product  Product?       @relation(fields: [productId], references: [id])
+  prices   ProductPrice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope, isActive])
+  @@index([productId])
+  @@index([vendorId, categoryId])
+}
+
+/// PUBLIC. The computed retail price — the only price the storefront reads.
+/// Materialized on every cost/rule change so listing pages need zero math.
+model ProductPrice {
+  productId      String   @id
+  retailMinor    Int // NPR paisa shown to the customer
+  compareAtMinor Int? // optional strike-through price
+  currency       Currency @default(NPR)
+  // Internal audit fields — excluded from public DTOs by the serializer.
+  appliedRuleId  String
+  sourceOfferId  String
+  computedAt     DateTime @default(now())
+
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  appliedRule PricingRule @relation(fields: [appliedRuleId], references: [id])
+
+  @@index([retailMinor])
+}
+
+/// Immutable audit trail for finance & dispute resolution.
+model PriceHistory {
+  id            String   @id @default(cuid())
+  productId     String
+  offerId       String
+  ruleId        String
+  baseCostMinor Int
+  retailMinor   Int
+  reason        String // "vendor_ingest" | "rule_change" | "manual_override"
+  createdAt     DateTime @default(now())
+
+  @@index([productId, createdAt])
+}
+
+/// FX snapshots used to quote NPR prices to diaspora buyers.
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  base      Currency // e.g. USD
+  quote     Currency @default(NPR)
+  rate      Decimal  @db.Decimal(18, 8) // 1 base = rate quote
+  source    String // "nrb" | "openexchangerates" | ...
+  fetchedAt DateTime @default(now())
+
+  @@index([base, quote, fetchedAt])
+}
+
+// ----------------------------------------------------------------------------
+// Orders & payments (minimal slice needed for Fonepay)
+// ----------------------------------------------------------------------------
+
+model Order {
+  id                String      @id @default(cuid())
+  number            String      @unique // human-friendly, e.g. CH-24A7K9
+  userId            String
+  status            OrderStatus @default(PENDING_PAYMENT)
+  deliveryAddressId String?
+  giftMessage       String?
+  deliverOn         DateTime?
+
+  // Totals are always NPR (settlement currency). FX applies at payment.
+  subtotalMinor    Int
+  deliveryFeeMinor Int @default(0)
+  discountMinor    Int @default(0)
+  totalMinor       Int
+
+  user            User        @relation(fields: [userId], references: [id])
+  deliveryAddress Address?    @relation(fields: [deliveryAddressId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model OrderItem {
+  id              String  @id @default(cuid())
+  orderId         String
+  productId       String
+  quantity        Int
+  unitRetailMinor Int // snapshot of ProductPrice at checkout
+  unitCostMinor   Int // snapshot of VendorOffer cost (internal; for margin reporting)
+  vendorId        String
+  order           Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([vendorId])
+}
+
+model Payment {
+  id                 String          @id @default(cuid())
+  orderId            String
+  provider           PaymentProvider
+  status             PaymentStatus   @default(INITIATED)
+  /// Our unique reference sent to the gateway (Fonepay PRN). Idempotency key.
+  reference          String          @unique
+  amountMinor        Int // in `currency`
+  currency           Currency        @default(NPR)
+  /// For international payments: NPR amount locked at the quoted FX rate.
+  settlementNprMinor Int
+  fxRate             Decimal?        @db.Decimal(18, 8)
+  providerTxnId      String? // Fonepay UID / Stripe PaymentIntent id
+  rawRequest         Json?
+  rawResponse        Json?
+  failureReason      String?
+  expiresAt          DateTime?
+  paidAt             DateTime?
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([provider, status])
+}
