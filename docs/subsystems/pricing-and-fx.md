@@ -15,7 +15,7 @@ sources:
   - code: prisma/seed.ts
   - code: tests/margin.test.ts
   - code: tests/fx.test.ts
-verified_at: 27eb527
+verified_at: 4628ba6
 ---
 
 # Pricing and FX
