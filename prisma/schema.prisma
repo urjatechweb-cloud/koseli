@@ -1,5 +1,5 @@
 // =============================================================================
-// Chino — core schema: Users, Catalog, Margin-engine Pricing, Orders, Payments
+// Koseli — core schema: Users, Catalog, Margin-engine Pricing, Orders, Payments
 // -----------------------------------------------------------------------------
 // Money rules (non-negotiable):
 //   * All amounts are integers in the MINOR unit (paisa for NPR, cents for USD).
@@ -35,7 +35,13 @@ enum Currency {
   AUD
   GBP
   EUR
+  CAD
   INR
+  JPY // zero-decimal
+  KRW // zero-decimal
+  AED
+  QAR
+  SAR
 }
 
 enum ProductStatus {
@@ -433,13 +439,48 @@ model ExchangeRate {
   @@index([base, quote, fetchedAt])
 }
 
+/// A price lock shown to a diaspora buyer: "pay USD 13.42 for this NPR 1,740 order".
+/// Valid until `expiresAt`; the Stripe/PayPal charge must use exactly `foreignMinor`.
+model FxQuote {
+  id            String   @id @default(cuid())
+  orderId       String
+  currency      Currency // buyer's currency
+  nprMinor      Int // order total being converted (paisa)
+  foreignMinor  Int // amount charged in `currency` (cents/pence), buffer included
+  rate          Decimal  @db.Decimal(18, 8) // NPR per 1 unit of `currency`, before buffer
+  bufferBps     Int // FX + card-fee cushion baked into foreignMinor
+  rateSource    String
+  rateFetchedAt DateTime
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([orderId, createdAt])
+}
+
+/// Every inbound webhook, deduplicated by provider event id. Gives replay-safety and an audit log.
+model WebhookEvent {
+  id          String          @id @default(cuid())
+  provider    PaymentProvider
+  eventId     String
+  type        String
+  payload     Json
+  processedAt DateTime?
+  error       String?
+  receivedAt  DateTime        @default(now())
+
+  @@unique([provider, eventId])
+}
+
 // ----------------------------------------------------------------------------
 // Orders & payments (minimal slice needed for Fonepay)
 // ----------------------------------------------------------------------------
 
 model Order {
   id                String      @id @default(cuid())
-  number            String      @unique // human-friendly, e.g. CH-24A7K9
+  number            String      @unique // human-friendly, e.g. KS-24A7K9
   userId            String
   status            OrderStatus @default(PENDING_PAYMENT)
   deliveryAddressId String?
@@ -456,6 +497,7 @@ model Order {
   deliveryAddress Address?    @relation(fields: [deliveryAddressId], references: [id])
   items           OrderItem[]
   payments        Payment[]
+  fxQuotes        FxQuote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -491,6 +533,7 @@ model Payment {
   /// For international payments: NPR amount locked at the quoted FX rate.
   settlementNprMinor Int
   fxRate             Decimal?        @db.Decimal(18, 8)
+  fxQuoteId          String?
   providerTxnId      String? // Fonepay UID / Stripe PaymentIntent id
   rawRequest         Json?
   rawResponse        Json?
@@ -498,11 +541,13 @@ model Payment {
   expiresAt          DateTime?
   paidAt             DateTime?
 
-  order Order @relation(fields: [orderId], references: [id])
+  order   Order    @relation(fields: [orderId], references: [id])
+  fxQuote FxQuote? @relation(fields: [fxQuoteId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([provider, providerTxnId])
   @@index([orderId])
   @@index([provider, status])
 }

@@ -1,5 +1,4 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import {
   buildWebPaymentUrl,
@@ -8,19 +7,11 @@ import {
   loadFonepayConfig,
   verifyWebReturn,
 } from "./fonepay";
+import { markFailed, markSucceeded, PaymentError, newReference } from "./settlement";
+
+export { PaymentError };
 
 const QR_TTL_MS = 10 * 60 * 1000;
-
-/** PRN: unique, URL-safe, ≤ 25 chars, no commas (it is part of the signed CSV). */
-export function newPrn(): string {
-  return `CH${Date.now().toString(36).toUpperCase()}${randomBytes(5).toString("hex").toUpperCase()}`;
-}
-
-export class PaymentError extends Error {
-  constructor(message: string, readonly status: number) {
-    super(message);
-  }
-}
 
 /** Load an order the user owns that is still awaiting payment. Amount comes from DB, never the client. */
 async function payableOrder(orderId: string, userId: string) {
@@ -37,7 +28,7 @@ async function payableOrder(orderId: string, userId: string) {
 export async function startFonepayQr(orderId: string, userId: string) {
   const order = await payableOrder(orderId, userId);
   const cfg = loadFonepayConfig();
-  const prn = newPrn();
+  const prn = newReference();
 
   const payment = await prisma.payment.create({
     data: {
@@ -71,7 +62,7 @@ export async function startFonepayQr(orderId: string, userId: string) {
 export async function startFonepayWeb(orderId: string, userId: string, appUrl: string) {
   const order = await payableOrder(orderId, userId);
   const cfg = loadFonepayConfig();
-  const prn = newPrn();
+  const prn = newReference();
   await prisma.payment.create({
     data: {
       orderId: order.id,
@@ -88,36 +79,6 @@ export async function startFonepayWeb(orderId: string, userId: string, appUrl: s
     amountMinor: order.totalMinor,
     remarks1: order.number,
     returnUrl: new URL("/api/payments/fonepay/return", appUrl).toString(),
-  });
-}
-
-/**
- * Idempotent settle. The conditional `updateMany` means concurrent callers
- * (QR poll + websocket + return URL) can race safely: exactly one flips the
- * payment and the order; the rest are no-ops.
- */
-async function markSucceeded(reference: string, providerTxnId: string | null, raw: unknown) {
-  return prisma.$transaction(async (tx) => {
-    const flipped = await tx.payment.updateMany({
-      where: { reference, status: { in: ["INITIATED", "PENDING"] } },
-      data: { status: "SUCCEEDED", providerTxnId, paidAt: new Date(), rawResponse: raw as object },
-    });
-    const payment = await tx.payment.findUniqueOrThrow({ where: { reference }, select: { orderId: true, status: true } });
-    if (flipped.count === 1) {
-      await tx.order.updateMany({
-        where: { id: payment.orderId, status: "PENDING_PAYMENT" },
-        data: { status: "PAID" },
-      });
-      // TODO(phase-3): enqueue vendor fulfilment + receipt SMS/email here (outbox table).
-    }
-    return payment;
-  });
-}
-
-async function markFailed(reference: string, reason: string, raw?: unknown) {
-  await prisma.payment.updateMany({
-    where: { reference, status: { in: ["INITIATED", "PENDING"] } },
-    data: { status: "FAILED", failureReason: reason.slice(0, 500), rawResponse: (raw ?? undefined) as object | undefined },
   });
 }
 

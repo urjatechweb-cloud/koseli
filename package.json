@@ -1,5 +1,5 @@
 {
-  "name": "chino",
+  "name": "koseli",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -19,8 +19,9 @@
     "qrcode": "1.5.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "zod": "3.23.8",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "stripe": "17.7.0",
+    "zod": "3.23.8"
   },
   "devDependencies": {
     "@types/node": "20.14.10",
@@ -28,9 +29,9 @@
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "prisma": "6.19.3",
+    "tsx": "4.19.2",
     "typescript": "5.5.4",
-    "vitest": "2.1.9",
-    "tsx": "4.19.2"
+    "vitest": "2.1.9"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

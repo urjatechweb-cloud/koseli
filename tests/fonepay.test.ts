@@ -26,22 +26,22 @@ describe("amount codec", () => {
 
 describe("web checkout", () => {
   it("signs request fields in order PID,MD,PRN,AMT,CRN,DT,R1,R2,RU", () => {
-    const u = new URL(buildWebPaymentUrl(cfg, { prn: "CHTEST1", amountMinor: 120_000, remarks1: "CH-1,23", returnUrl: "https://x.np/r" }, new Date("2026-11-04T06:00:00Z")));
-    expect(u.searchParams.get("R1")).toBe("CH-1 23"); // commas stripped
-    expect(u.searchParams.get("DV")).toBe(hmac("NBQM,P,CHTEST1,1200.00,NPR,11/04/2026,CH-1 23,N/A,https://x.np/r"));
+    const u = new URL(buildWebPaymentUrl(cfg, { prn: "KSTEST1", amountMinor: 120_000, remarks1: "KS-1,23", returnUrl: "https://x.np/r" }, new Date("2026-11-04T06:00:00Z")));
+    expect(u.searchParams.get("R1")).toBe("KS-1 23"); // commas stripped
+    expect(u.searchParams.get("DV")).toBe(hmac("NBQM,P,KSTEST1,1200.00,NPR,11/04/2026,KS-1 23,N/A,https://x.np/r"));
   });
 
   const signedReturn = (o: Record<string, string>) => {
     const dv = hmac(["PRN", "PID", "PS", "RC", "UID", "BC", "INI", "P_AMT", "R_AMT"].map((k) => o[k] ?? "").join(","));
     return new URLSearchParams({ ...o, DV: dv });
   };
-  const okReturn = { PRN: "CHTEST1", PID: "NBQM", PS: "true", RC: "successful", UID: "123", BC: "NICENPKA", INI: "x", P_AMT: "1200.00", R_AMT: "1200.00", BID: "" };
+  const okReturn = { PRN: "KSTEST1", PID: "NBQM", PS: "true", RC: "successful", UID: "123", BC: "NICENPKA", INI: "x", P_AMT: "1200.00", R_AMT: "1200.00", BID: "" };
   const okXml = "<response><success>true</success><response_code>successful</response_code></response>";
 
   it("accepts a valid, server-verified return", async () => {
     const f = vi.fn().mockResolvedValue(new Response(okXml));
     const r = await verifyWebReturn(cfg, signedReturn(okReturn), 120_000, f);
-    expect(r).toEqual({ ok: true, prn: "CHTEST1", uid: "123", paidMinor: 120_000 });
+    expect(r).toEqual({ ok: true, prn: "KSTEST1", uid: "123", paidMinor: 120_000 });
     expect(f).toHaveBeenCalledOnce();
   });
   it("rejects a tampered return as untrusted without calling Fonepay", async () => {
@@ -65,13 +65,13 @@ describe("web checkout", () => {
 describe("dynamic QR", () => {
   it("posts signed body and returns qrMessage", async () => {
     const f = vi.fn().mockResolvedValue(Response.json({ success: true, qrMessage: "000201...", thirdpartyQrWebSocketUrl: "wss://ws" }));
-    const r = await createDynamicQr(cfg, { prn: "CHQR1", amountMinor: 50_000, remarks1: "CH-9" }, f);
+    const r = await createDynamicQr(cfg, { prn: "KSQR1", amountMinor: 50_000, remarks1: "KS-9" }, f);
     expect(r.qrMessage).toBe("000201...");
     const body = JSON.parse(f.mock.calls[0]![1].body);
-    expect(body.dataValidation).toBe(hmac("500.00,CHQR1,NBQM,CH-9,N/A"));
+    expect(body.dataValidation).toBe(hmac("500.00,KSQR1,NBQM,KS-9,N/A"));
   });
   it("throws when Fonepay returns no QR", async () => {
     const f = vi.fn().mockResolvedValue(Response.json({ success: false, message: "Invalid credentials" }, { status: 400 }));
-    await expect(createDynamicQr(cfg, { prn: "CHQR2", amountMinor: 100, remarks1: "x" }, f)).rejects.toThrow(/Invalid credentials/);
+    await expect(createDynamicQr(cfg, { prn: "KSQR2", amountMinor: 100, remarks1: "x" }, f)).rejects.toThrow(/Invalid credentials/);
   });
 });
