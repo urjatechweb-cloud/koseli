@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Hanken_Grotesk, IBM_Plex_Mono, Rozha_One } from "next/font/google";
 import { CartCount, CartProvider } from "@/components/cart";
 import { Logo } from "@/components/art";
+import { getCurrentUser } from "@/server/auth";
 import "./globals.css";
 
 const display = Rozha_One({ weight: "400", subsets: ["latin", "devanagari"], variable: "--font-display", display: "swap" });
@@ -14,7 +15,8 @@ export const metadata: Metadata = {
   description: "Send cakes, flowers, hampers and local crafts to family in Nepal. Pay in Nepal with Fonepay, or from abroad by card.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="min-h-screen">
@@ -29,6 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <nav className="ml-auto flex items-center gap-1 text-sm font-semibold">
                 <Link href="/shop" className="rounded-lg px-3 py-2 hover:bg-surface">Shop</Link>
                 <Link href="/shop?today=1" className="hidden rounded-lg px-3 py-2 hover:bg-surface sm:inline">Today in Pokhara</Link>
+                <Link href={user?.signedIn ? "/account" : "/signin"} className="rounded-lg px-3 py-2 hover:bg-surface">
+                  {user?.signedIn ? "Account" : "Sign in"}
+                </Link>
                 <Link href="/cart" className="flex items-center rounded-lg px-3 py-2 hover:bg-surface">
                   Cart <CartCount />
                 </Link>

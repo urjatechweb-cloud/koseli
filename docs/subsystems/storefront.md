@@ -43,9 +43,10 @@ The order API sets `ks_session`, a signed httpOnly cookie in the form `userId.ex
 payment routes read the user only from that cookie.
 
 > ⚠️ Checkout creates a **new** guest `User` for every new session and never looks one up
-> by phone or email (`src/server/orders.ts`, `createOrder`). If phone lookup were added
-> without a real login (OTP), anyone could type a stranger's number and read their
-> orders.
+> by phone or email (`src/server/orders.ts`, `createOrder`). The only way to reach an
+> account by phone number is [[sign-in]], which first proves the buyer owns the number
+> with an SMS code. Never add a phone lookup anywhere else, or anyone could type a
+> stranger's number and read their orders.
 
 > ⚠️ The buyer's contact goes on `Order.senderContact`, not on `User.email` or
 > `User.phone`. Those columns are unique, and two guest checkouts with the same phone
@@ -76,5 +77,5 @@ payment routes read the user only from that cookie.
 
 ## Not built yet
 
-Real sign-in (OTP or Auth.js), order history across devices, Nepali-language UI, vendor
+Nepali-language UI, vendor
 photos, the 3D hamper viewer, and the services marketplace (photographers and events).

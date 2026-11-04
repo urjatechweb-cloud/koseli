@@ -12,6 +12,7 @@ This wiki grows as work happens (`docs-mode: grow`). It only covers what has bee
 - **Pricing or money:** [[pricing-and-fx]], then [[payments]]
 - **Payments or a gateway:** [[payments]]
 - **Customer pages or checkout:** [[storefront]], then [[payments]]
+- **Accounts and sign-in:** [[sign-in]]
 - **Setup and run:** the repository `README.md`
 - **Deploying or CI:** [[deploy]]
 
@@ -30,6 +31,7 @@ _No pages yet._
 - [[pricing-and-fx]] -- vendor cost to NPR retail (20% margin engine), then NPR to the buyer's currency (NRB rates, 15-min quotes)
 - [[payments]] -- Fonepay QR and web, Stripe, and the shared once-only settlement
 - [[storefront]] -- customer pages, cart, guest checkout and sessions, the order page
+- [[sign-in]] -- phone number and SMS code sign-in, rate limits, merging a guest's orders into an account
 
 ## decisions
 

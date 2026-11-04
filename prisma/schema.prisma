@@ -131,6 +131,21 @@ model User {
   @@index([role])
 }
 
+/// One-time SMS sign-in code. Only an HMAC of the code is stored, never the code itself.
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  phone      String // E.164
+  codeHash   String // HMAC-SHA256(SESSION_SECRET, id + ":" + code)
+  ipHash     String // HMAC of the requester's IP, for rate limiting without storing raw IPs
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([ipHash, createdAt])
+}
+
 model Session {
   id           String   @id @default(cuid())
   userId       String
@@ -486,7 +501,7 @@ model Order {
   status            OrderStatus @default(PENDING_PAYMENT)
   deliveryAddressId String?
   giftMessage       String?
-  deliverOn         DateTime?  @db.Date
+  deliverOn         DateTime?   @db.Date
   senderName        String?
   senderContact     String? // phone or email the buyer gave at checkout (guest users have none on User)
   recipientName     String?

@@ -52,6 +52,29 @@ export function setSessionCookie(userId: string): void {
   });
 }
 
+export function clearSessionCookie(): void {
+  cookies().set(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
+}
+
+/**
+ * The user behind the cookie, for pages. `signedIn` means a verified phone,
+ * as opposed to a guest who has only checked out. Deleted users (merged
+ * guests) count as signed out.
+ */
+export async function getCurrentUser() {
+  let id: string | null = null;
+  try {
+    id = getSessionUserId();
+  } catch {
+    return null; // SESSION_SECRET missing: render pages signed out rather than crash every page
+  }
+  if (!id) return null;
+  const { prisma } = await import("@/lib/prisma");
+  const u = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true, phone: true, phoneVerified: true, deletedAt: true } });
+  if (!u || u.deletedAt) return null;
+  return { id: u.id, name: u.name, phone: u.phone, signedIn: Boolean(u.phone && u.phoneVerified) };
+}
+
 /** For API routes: the signed-in (guest) user, or 401. */
 export async function requireUserId(_req: Request): Promise<string> {
   const id = getSessionUserId();

@@ -64,6 +64,9 @@ Until those secrets exist, `deploy` prints a warning and skips itself; `test` st
 > the new schema. Keep migrations additive: add columns or tables first, and remove old
 > ones in a later deploy.
 
+> ⚠️ `DEMO_OTP=true` shows sign-in codes on screen, so anyone can sign in as any phone
+> number. Like `DEMO_PAYMENTS`, it is for team previews only (see [[sign-in]]).
+
 > ⚠️ `DEMO_PAYMENTS=true` is acceptable on a team-only preview. Remove it before the site
 > is public: it lets anyone mark an order paid without paying (see [[payments]]).
 

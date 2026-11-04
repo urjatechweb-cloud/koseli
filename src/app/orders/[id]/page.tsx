@@ -26,8 +26,11 @@ export default async function OrderPage({ params, searchParams }: { params: { id
     return (
       <main className="wrap grid justify-items-start gap-3 py-10">
         <h1 className="font-display text-4xl">Order not found</h1>
-        <p className="text-muted">Open this page on the device you ordered from, or check the link in your confirmation.</p>
-        <Link href="/shop" className="btn-ghost">Back to gifts</Link>
+        <p className="text-muted">Sign in with the phone number you used, or open this page on the device you ordered from.</p>
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/signin?next=/orders/${encodeURIComponent(params.id)}`} className="btn-primary">Sign in</Link>
+          <Link href="/shop" className="btn-ghost">Back to gifts</Link>
+        </div>
       </main>
     );
   }

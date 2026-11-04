@@ -22,3 +22,9 @@ Append-only. Newest entries at the bottom.
 ## [2026-11-04] grow | CI and deploy
 
 - New page [[deploy]]: the workflow, one-time setup, migration safety, Docker
+
+## [2026-11-04] grow | phone sign-in
+
+- New page [[sign-in]]
+- [[storefront]]: phone lookups only through sign-in
+- [[deploy]]: warning about `DEMO_OTP`

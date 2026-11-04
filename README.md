@@ -71,6 +71,7 @@ After the setup steps above, put these in `.env`:
 ```
 SESSION_SECRET="any-random-string-of-32-or-more-characters"
 DEMO_PAYMENTS="true"
+DEMO_OTP="true"
 ```
 
 ```bash
@@ -78,7 +79,8 @@ npm run dev
 ```
 
 Open http://localhost:3000 and walk the buyer journey: pick a gift, add it to the cart,
-check out, then use the **Demo** tab to mark the order paid. The Fonepay and card tabs
+check out, then use the **Demo** tab to mark the order paid. **Sign in** with any Nepali
+mobile number: with `DEMO_OTP` on, the code appears on screen instead of arriving by SMS. The Fonepay and card tabs
 show a "not connected yet" message until their keys are set. Never set `DEMO_PAYMENTS`
 on a site that customers can reach.
 
