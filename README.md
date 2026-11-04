@@ -64,6 +64,24 @@ npx shadcn@latest init
 
 Then Tailwind theme tokens, tRPC (`@trpc/server`, `@trpc/client`, `@trpc/react-query`), and Auth.js. Public tRPC procedures must select products with `publicProductSelect` from `pricing-service.ts`. That allow-list is what keeps vendor cost out of API responses.
 
+## Try the store locally
+
+After the setup steps above, put these in `.env`:
+
+```
+SESSION_SECRET="any-random-string-of-32-or-more-characters"
+DEMO_PAYMENTS="true"
+```
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000 and walk the buyer journey: pick a gift, add it to the cart,
+check out, then use the **Demo** tab to mark the order paid. The Fonepay and card tabs
+show a "not connected yet" message until their keys are set. Never set `DEMO_PAYMENTS`
+on a site that customers can reach.
+
 ## Money and margin rules
 
 * All money is an integer in paisa. There are no floats anywhere in the price path.

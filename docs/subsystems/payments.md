@@ -17,6 +17,7 @@ sources:
   - code: tests/fonepay.test.ts
   - code: tests/stripe.test.ts
   - code: tests/settlement.db.test.ts
+  - code: src/app/api/payments/demo/route.ts
 verified_at: 27eb527
 ---
 
@@ -78,9 +79,14 @@ that money moved. The FX quote that diaspora card payments start from is describ
 > checked against Fonepay's official merchant spec (unverified). Diff them against the
 > PDF Fonepay issues before going live.
 
-> ⚠️ `src/server/auth.ts` fails closed with a 501. Every payment route except the public
-> Fonepay `/return` and the Stripe webhook is unusable until auth is wired in. This is
-> intended. Do not replace it with a client-supplied user id.
+> ⚠️ Payment routes identify the buyer only through the signed guest-session cookie
+> (`src/server/auth.ts`, see [[storefront]]). Never accept a user id or an amount from the
+> request body. The public exceptions are the Fonepay `/return` and the Stripe webhook,
+> which are trusted through gateway signatures instead.
+
+> ⚠️ `POST /api/payments/demo` marks an order paid without charging anyone. It refuses
+> unless `DEMO_PAYMENTS=true` (`src/app/api/payments/demo/route.ts`). Never set that on a
+> site customers can reach.
 
 ## Tests
 

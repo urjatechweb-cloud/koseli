@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Koseli palette: marigold (sayapatri), rhododendron (lali gurans), leaf. RGB triplets for Tailwind alpha. */
+:root {
+  --bg: 245 246 242;
+  --surface: 255 255 255;
+  --ink: 31 26 43;
+  --muted: 93 88 107;
+  --line: 221 219 227;
+  --marigold: 217 142 4;
+  --gurans: 177 36 62;
+  --leaf: 31 107 79;
+  --marigold-soft: 251 239 211;
+  --gurans-soft: 248 225 229;
+  --leaf-soft: 221 239 230;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 21 19 28;
+    --surface: 30 27 39;
+    --ink: 237 234 243;
+    --muted: 167 162 181;
+    --line: 52 48 63;
+    --marigold: 241 178 58;
+    --gurans: 239 107 131;
+    --leaf: 92 199 156;
+    --marigold-soft: 58 45 16;
+    --gurans-soft: 61 26 34;
+    --leaf-soft: 19 51 42;
+    color-scheme: dark;
+  }
+}
+
+body { @apply bg-bg text-ink font-sans antialiased; }
+h1, h2, h3 { text-wrap: balance; }
+:focus-visible { outline: 2px solid rgb(var(--marigold)); outline-offset: 2px; }
+
+/* Palpali Dhaka lattice band */
+.dhaka {
+  height: 14px;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 6px, rgb(var(--gurans)) 6px 8px, transparent 8px 14px),
+    repeating-linear-gradient(-45deg, transparent 0 6px, rgb(var(--ink)) 6px 8px, transparent 8px 14px),
+    rgb(var(--marigold-soft));
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-ink text-bg hover:bg-gurans; }
+  .btn-ghost { @apply btn border border-line hover:border-marigold; }
+  .field { @apply w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-[15px] placeholder:text-muted/70; }
+  .label { @apply grid gap-1.5 text-sm font-semibold; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-muted; }
+  .wrap { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+}

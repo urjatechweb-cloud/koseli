@@ -87,6 +87,7 @@ enum PaymentProvider {
   KHALTI
   STRIPE
   PAYPAL
+  DEMO // simulated gateway for demos; only accepted when DEMO_PAYMENTS=true
 }
 
 enum PaymentStatus {
@@ -485,7 +486,11 @@ model Order {
   status            OrderStatus @default(PENDING_PAYMENT)
   deliveryAddressId String?
   giftMessage       String?
-  deliverOn         DateTime?
+  deliverOn         DateTime?  @db.Date
+  senderName        String?
+  senderContact     String? // phone or email the buyer gave at checkout (guest users have none on User)
+  recipientName     String?
+  recipientPhone    String?
 
   // Totals are always NPR (settlement currency). FX applies at payment.
   subtotalMinor    Int
