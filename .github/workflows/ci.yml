@@ -1,0 +1,107 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: koseli
+          POSTGRES_PASSWORD: koseli
+          POSTGRES_DB: koseli
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U koseli"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://koseli:koseli@localhost:5432/koseli
+      DIRECT_URL: postgresql://koseli:koseli@localhost:5432/koseli
+      TEST_DATABASE_URL: postgresql://koseli:koseli@localhost:5432/koseli
+      SESSION_SECRET: ci-only-session-secret-not-used-anywhere-else
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations to a fresh database
+        run: npx prisma migrate deploy
+      - name: Migrations match schema.prisma
+        # Compares the freshly migrated DB with schema.prisma. Exit code 2 = a schema change has no migration file.
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - name: Seed (also proves the seed still runs)
+        run: npx prisma db seed
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit and database tests
+        run: npm test
+      - name: Docs wiki links and sources
+        run: python3 .claude/scripts/docs-lint.py --root .
+      - name: Production build
+        run: npm run build
+
+  deploy:
+    name: Deploy to production
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false # never interrupt a migration halfway
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check deploy secrets are set
+        id: gate
+        env:
+          HAS_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
+          HAS_DB: ${{ secrets.DIRECT_URL != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ] || [ "$HAS_DB" != "true" ]; then
+            echo "::warning::Deploy skipped: set VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID, DATABASE_URL and DIRECT_URL in the 'production' environment."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+        if: steps.gate.outputs.ready == 'true'
+      - name: Migrate production database
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma migrate deploy
+      - name: Build and deploy on Vercel
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@39.4.2 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@39.4.2 build --prod --token="$VERCEL_TOKEN"
+          url=$(npx --yes vercel@39.4.2 deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "Deployed: $url" >> "$GITHUB_STEP_SUMMARY"

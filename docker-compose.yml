@@ -1,0 +1,33 @@
+# Local full stack: docker compose up --build  ->  http://localhost:3000
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: koseli
+      POSTGRES_PASSWORD: koseli
+      POSTGRES_DB: koseli
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U koseli"]
+      interval: 3s
+      retries: 20
+  migrate:
+    build: { context: ., target: deps }
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed"
+    environment: &dbenv
+      DATABASE_URL: postgresql://koseli:koseli@db:5432/koseli
+      DIRECT_URL: postgresql://koseli:koseli@db:5432/koseli
+    volumes: [./prisma:/app/prisma, ./src:/app/src, ./tsconfig.json:/app/tsconfig.json]
+    depends_on: { db: { condition: service_healthy } }
+  web:
+    build: .
+    environment:
+      <<: *dbenv
+      SESSION_SECRET: local-docker-session-secret-change-me-please
+      DEMO_PAYMENTS: "true"
+      APP_URL: http://localhost:3000
+    ports: ["3000:3000"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+volumes:
+  pgdata:

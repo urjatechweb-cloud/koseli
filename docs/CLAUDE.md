@@ -140,7 +140,7 @@ regular expression (for example `fastlane|docker compose .* up|npm publish`). Wh
 agent runs a matching command, the commit hook says `/docs-sync` is due. Leave it empty if
 there are none.
 
-release-commands:
+release-commands: vercel (deploy|--prod)|prisma migrate deploy|docker compose .*up
 
 ## Security
 

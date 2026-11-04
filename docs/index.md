@@ -12,7 +12,8 @@ This wiki grows as work happens (`docs-mode: grow`). It only covers what has bee
 - **Pricing or money:** [[pricing-and-fx]], then [[payments]]
 - **Payments or a gateway:** [[payments]]
 - **Customer pages or checkout:** [[storefront]], then [[payments]]
-- **Setup and run:** the repository `README.md`. No operations page yet
+- **Setup and run:** the repository `README.md`
+- **Deploying or CI:** [[deploy]]
 
 ---
 
@@ -40,7 +41,7 @@ _No pages yet._
 
 ## operations
 
-_No pages yet._
+- [[deploy]] -- GitHub Actions pipeline, Vercel and Supabase setup, Docker
 
 ## history
 

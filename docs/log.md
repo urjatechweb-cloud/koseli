@@ -18,3 +18,7 @@ Append-only. Newest entries at the bottom.
 
 - New page [[storefront]]: customer pages, guest sessions and order creation
 - [[payments]]: replaced the "auth fails closed" note with the cookie rule; added a note on the demo payment route
+
+## [2026-11-04] grow | CI and deploy
+
+- New page [[deploy]]: the workflow, one-time setup, migration safety, Docker

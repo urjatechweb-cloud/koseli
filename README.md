@@ -82,6 +82,14 @@ check out, then use the **Demo** tab to mark the order paid. The Fonepay and car
 show a "not connected yet" message until their keys are set. Never set `DEMO_PAYMENTS`
 on a site that customers can reach.
 
+## Deploy
+
+Every push to `main` runs the tests on GitHub Actions. If they pass, the workflow
+migrates the production database and deploys to Vercel. The one-time setup (Supabase,
+Vercel, and the GitHub `production` environment secrets) is in
+[`docs/operations/deploy.md`](docs/operations/deploy.md). To self-host instead, use the
+`Dockerfile` or run `docker compose up --build`.
+
 ## Money and margin rules
 
 * All money is an integer in paisa. There are no floats anywhere in the price path.
