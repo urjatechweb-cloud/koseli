@@ -20,7 +20,7 @@ The pipeline is a single workflow, `.github/workflows/ci.yml`. It has two jobs:
 | Job | Runs on | What it does |
 |---|---|---|
 | `test` | every push and every pull request | Starts a fresh Postgres 16, applies migrations, checks schema drift, seeds, type-checks, runs the tests (including the database test), lints the docs and builds |
-| `deploy` | push to `main`, only after `test` passes | Applies migrations to the production database, then builds and deploys to Vercel with the CLI |
+| `deploy` | push to `main` or a manual run ("Run workflow") on `main`, only after `test` passes | Applies migrations to the production database, then builds and deploys to Vercel with the CLI |
 
 ## One-time setup
 
